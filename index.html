@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Michael 9 Grant Interactive Guitar Fretboard & Chord Finder</title>
+    <!-- Using a reliable CDN for Tonal.js -->
+    <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1d2b64, #f8cdda);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .error-message {
+            text-align: center; 
+            padding: 50px; 
+            color: #fff;
+            display: none; /* Hidden by default */
+        }
+        .error-message h1 {
+            margin-bottom: 15px;
+        }
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 1100px;
+        }
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            opacity: 0.9;
+        }
+        .fretboard-container {
+            background: #2c3e50;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            margin-bottom: 20px;
+            position: relative;
+            overflow-x: auto;
+        }
+        .fretboard {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-width: 1000px;
+        }
+        .string {
+            display: flex;
+            height: 40px;
+            position: relative;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .string:last-child {
+            border-bottom: none;
+        }
+        .string::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
+            height: 2px;
+            background: #bdc3c7;
+            z-index: 1;
+        }
+        /* Simulating string thickness */
+        .string:nth-child(1)::before { height: 1px; } /* High E */
+        .string:nth-child(2)::before { height: 1.5px; } /* B */
+        .string:nth-child(3)::before { height: 2px; }   /* G */
+        .string:nth-child(4)::before { height: 2.5px; } /* D */
+        .string:nth-child(5)::before { height: 3px; }   /* A */
+        .string:nth-child(6)::before { height: 3px; }   /* Low E */
+
+        .fret {
+            position: relative;
+            flex-grow: 1;
+            flex-basis: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 2;
+        }
+        .fret::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            height: 100%;
+            width: 2px;
+            background: #95a5a6;
+        }
+        .fret:first-child { /* The nut */
+            flex-grow: 0.7;
+            flex-basis: 50px;
+        }
+        .fret:first-child::after {
+            background: #ecf0f1;
+            width: 5px;
+        }
+        .fret-label {
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            font-size: 0.9rem;
+            opacity: 0;
+            pointer-events: none; /* Prevent label from stealing clicks */
+        }
+        .fret:hover .fret-label, .fret.selected .fret-label {
+            opacity: 1;
+        }
+        .fret.selected .fret-label {
+            transform: scale(1.2);
+            background: #e74c3c;
+            box-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
+        }
+        .fret-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            z-index: 0;
+        }
+        .fret-numbers {
+            display: flex;
+            margin-top: 10px;
+            min-width: 1000px; /* Match fretboard width */
+        }
+        .fret-number {
+            flex-grow: 1;
+            flex-basis: 0;
+            text-align: center;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .fret-number:first-child {
+            flex-grow: 0.7;
+            flex-basis: 50px;
+            color: transparent; /* Hide '0' for the nut */
+        }
+        .info-panel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            padding: 25px;
+            width: 100%;
+            max-width: 1100px;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            align-items: end;
+            margin-bottom: 25px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        /* Styles for select with arrows */
+        .select-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        .control-group select {
+            flex-grow: 1;
+            padding: 12px;
+            border-radius: 8px 0 0 8px;
+            border: 1px solid #7f8c8d;
+            background-color: #34495e;
+            color: #ecf0f1;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            border-right: none;
+            -moz-appearance: none;
+            -webkit-appearance: none;
+            appearance: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .select-arrows {
+            display: flex;
+            flex-direction: column;
+        }
+        .arrow-btn {
+            background-color: #34495e;
+            color: #ecf0f1;
+            border: 1px solid #7f8c8d;
+            border-left: 1px solid #566573;
+            padding: 1px 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            line-height: 1;
+            height: 24.5px;
+        }
+        .arrow-btn:first-child {
+            border-radius: 0 8px 0 0;
+            border-bottom: 0.5px solid #566573;
+        }
+        .arrow-btn:last-child {
+            border-radius: 0 0 8px 0;
+             border-top: 0.5px solid #566573;
+        }
+        .arrow-btn:hover {
+            background-color: #4a627a;
+        }
+
+        .control-group button.clear-btn {
+            width: 100%;
+            padding-top: 13px;
+            padding-bottom: 13px;
+            border-radius: 8px;
+            border: 1px solid #7f8c8d;
+            background-color: #c0392b;
+            color: #ecf0f1;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+
+        .clear-btn:hover {
+             background-color: #e74c3c;
+        }
+        .chord-display {
+            text-align: center;
+            padding: 25px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        .chord-name-label {
+            font-size: 1rem;
+            color: #bdc3c7;
+            margin-bottom: 5px;
+        }
+        .current-chord-name {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3498db;
+            text-shadow: 0 0 10px rgba(52, 152, 219, 0.7);
+            min-height: 50px;
+            line-height: 1.2;
+        }
+        .chord-notes {
+            font-size: 1.1rem;
+            color: #ecf0f1;
+            margin-top: 10px;
+        }
+        /* Footer styles */
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            opacity: 0.7;
+        }
+        @media (max-width: 768px) {
+            h1 { font-size: 2.2rem; }
+            .fretboard-container { padding: 15px; }
+            .info-panel { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="error-message">
+        <h1>Error: Music library failed to load</h1>
+        <p>Please check your internet connection and refresh the page.</p>
+    </div>
+
+    <div class="app-container">
+         <header>
+            <h1>Michael 9 Grant Interactive Guitar Fretboard & Chord Finder</h1>
+            <p class="subtitle" id="tuning-subtitle">Standard Tuning: E A D G B E</p>
+        </header>
+
+        <div class="fretboard-container">
+            <div class="fretboard">
+                <!-- Strings generated by JS -->
+            </div>
+            <div class="fret-numbers">
+                 <!-- Fret numbers generated by JS -->
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label for="root-note-select">Root Note</label>
+                    <div class="select-wrapper">
+                        <select id="root-note-select"></select>
+                        <div class="select-arrows">
+                            <button class="arrow-btn" data-target="root-note-select" data-direction="-1">▲</button>
+                            <button class="arrow-btn" data-target="root-note-select" data-direction="1">▼</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="chord-type-select">Chord Type</label>
+                     <div class="select-wrapper">
+                        <select id="chord-type-select"></select>
+                         <div class="select-arrows">
+                            <button class="arrow-btn" data-target="chord-type-select" data-direction="-1">▲</button>
+                            <button class="arrow-btn" data-target="chord-type-select" data-direction="1">▼</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="positions-select">Chord Positions</label>
+                    <div class="select-wrapper">
+                        <select id="positions-select"></select>
+                        <div class="select-arrows">
+                            <button class="arrow-btn" data-target="positions-select" data-direction="-1">▲</button>
+                            <button class="arrow-btn" data-target="positions-select" data-direction="1">▼</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- NEW: Barre Chord Dropdown -->
+                <div class="control-group">
+                    <label for="barre-chord-select">Barre</label>
+                    <div class="select-wrapper">
+                        <select id="barre-chord-select"></select>
+                        <div class="select-arrows">
+                            <button class="arrow-btn" data-target="barre-chord-select" data-direction="-1">▲</button>
+                            <button class="arrow-btn" data-target="barre-chord-select" data-direction="1">▼</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="clear-fretboard-btn" class="clear-btn">Clear Fretboard</button>
+                </div>
+            </div>
+            <div class="chord-display">
+                <div class="chord-name-label">Detected Chord</div>
+                <div class="current-chord-name">Select notes to identify a chord</div>
+                <div class="chord-notes">Notes: <span id="selected-notes-info">-</span></div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2025 Michael 9 Grant Interactive Guitar Fretboard & Chord Finder</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- LIBRARY CHECK ---
+            if (typeof Tonal === 'undefined') {
+                console.error('Tonal.js library failed to load');
+                document.querySelector('.app-container').style.display = 'none';
+                document.querySelector('.error-message').style.display = 'block';
+                return;
+            }
+
+            // --- DOM ELEMENTS ---
+            const fretboardEl = document.querySelector('.fretboard');
+            const fretNumbersEl = document.querySelector('.fret-numbers');
+            const chordNameEl = document.querySelector('.current-chord-name');
+            const selectedNotesInfoEl = document.getElementById('selected-notes-info');
+            const rootNoteSelect = document.getElementById('root-note-select');
+            const chordTypeSelect = document.getElementById('chord-type-select');
+            const positionsSelect = document.getElementById('positions-select');
+            const barreChordSelect = document.getElementById('barre-chord-select');
+            const clearBtn = document.getElementById('clear-fretboard-btn');
+            const tuningSubtitleEl = document.getElementById('tuning-subtitle');
+            const arrowBtns = document.querySelectorAll('.arrow-btn');
+
+            // --- CONSTANTS & STATE ---
+            const OPEN_STRINGS = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
+            const NUM_FRETS = 16;
+            let selectedNotes = []; 
+            let availableVoicings = [];
+            
+            // NEW: Data for Barre Chords based on the provided PDF
+            const BARRE_CHORDS = [
+                { name: 'Dominant 9th (E-Form)', rootString: 6, fingering: [ {s:5, f:0}, {s:4, f:2}, {s:3, f:0}, {s:2, f:-1}, {s:1, f:0}, {s:0, f:0} ] },
+                { name: 'Major 9th (E-Form)', rootString: 6, fingering: [ {s:5, f:0}, {s:4, f:2}, {s:3, f:1}, {s:2, f:-1}, {s:1, f:0}, {s:0, f:-1} ] },
+                { name: 'Minor 9th (E-Form)', rootString: 6, fingering: [ {s:5, f:0}, {s:4, f:2}, {s:3, f:0}, {s:2, f:-1}, {s:1, f:0}, {s:0, f:0} ] },
+                { name: 'Dominant 11th (E-Form)', rootString: 6, fingering: [ {s:5, f:0}, {s:4, f:2}, {s:3, f:0}, {s:2, f:0}, {s:1, f:1}, {s:0, f:0} ] },
+                { name: 'Minor 11th (E-Form)', rootString: 6, fingering: [ {s:5, f:0}, {s:4, f:2}, {s:3, f:2}, {s:2, f:0}, {s:1, f:1}, {s:0, f:0} ] },
+                { name: 'Minor 11th (A-Form)', rootString: 5, fingering: [ {s:4, f:0}, {s:3, f:2}, {s:2, f:0}, {s:1, f:1}, {s:0, f:0} ] },
+                { name: 'Dominant 13th (E-Form)', rootString: 6, fingering: [ {s:5, f:0}, {s:4, f:2}, {s:3, f:2}, {s:2, f:1}, {s:1, f:0}, {s:0, f:2} ] },
+                { name: 'Dominant 9th (A-Form)', rootString: 5, fingering: [ {s:4, f:0}, {s:3, f:0}, {s:2, f:-1}, {s:1, f:0}, {s:0, f:0} ] },
+                { name: '6/9 (A-Form)', rootString: 5, fingering: [ {s:4, f:0}, {s:3, f:0}, {s:2, f:-3}, {s:1, f:-2}, {s:0, f:0} ] },
+            ];
+
+            const getNote = (stringIndex, fret) => {
+                const openStringNote = OPEN_STRINGS[stringIndex];
+                return Tonal.Note.simplify(Tonal.transpose(openStringNote, Tonal.Interval.fromSemitones(fret)));
+            };
+
+            const clearFretboard = () => {
+                selectedNotes = [];
+                document.querySelectorAll('.fret.selected').forEach(fret => fret.classList.remove('selected'));
+                updateChordDisplay();
+            };
+            
+            const clearPositionsDropdown = () => {
+                positionsSelect.innerHTML = '<option value="">Found 0 positions</option>';
+            }
+
+            const updateChordDisplay = () => {
+                if (selectedNotes.length === 0) {
+                    chordNameEl.textContent = 'Select notes...';
+                    selectedNotesInfoEl.textContent = '-';
+                    return;
+                }
+                const uniqueNotes = [...new Set(selectedNotes.map(n => Tonal.Note.pitchClass(n.note)))];
+                const detectedChords = Tonal.Chord.detect(uniqueNotes);
+                chordNameEl.textContent = detectedChords.length > 0 ? detectedChords.join(' or ') : 'Unknown Chord';
+                selectedNotesInfoEl.textContent = uniqueNotes.sort(Tonal.Note.chromaCompare).join(' - ');
+            };
+
+            const handleFretClick = (e) => {
+                const fretEl = e.currentTarget;
+                const { stringIndex, fret } = fretEl.dataset;
+                const noteIdentifier = `${stringIndex}-${fret}`;
+                const existingSelectionIndex = selectedNotes.findIndex(n => n.id === noteIdentifier);
+
+                if (existingSelectionIndex > -1) {
+                    fretEl.classList.remove('selected');
+                    selectedNotes.splice(existingSelectionIndex, 1);
+                } else {
+                    const otherNoteOnStringIndex = selectedNotes.findIndex(n => n.stringIndex === parseInt(stringIndex));
+                    if (otherNoteOnStringIndex > -1) {
+                        const noteToDeselect = selectedNotes[otherNoteOnStringIndex];
+                        const oldFretEl = document.querySelector(`.fret[data-string-index='${noteToDeselect.stringIndex}'][data-fret='${noteToDeselect.fret}']`);
+                        if (oldFretEl) oldFretEl.classList.remove('selected');
+                        selectedNotes.splice(otherNoteOnStringIndex, 1);
+                    }
+                    fretEl.classList.add('selected');
+                    selectedNotes.push({
+                        id: noteIdentifier,
+                        note: getNote(parseInt(stringIndex), parseInt(fret)),
+                        stringIndex: parseInt(stringIndex),
+                        fret: parseInt(fret)
+                    });
+                }
+                barreChordSelect.value = ""; // Reset barre select
+                updateChordDisplay();
+                const currentNotes = [...new Set(selectedNotes.map(n => Tonal.Note.pitchClass(n.note)))];
+                if(currentNotes.length >= 3) findChordVoicings(currentNotes);
+                else clearPositionsDropdown();
+            };
+
+            const createFretboard = () => {
+                fretboardEl.innerHTML = '';
+                fretNumbersEl.innerHTML = '';
+                OPEN_STRINGS.forEach((openNote, i) => {
+                    const stringEl = document.createElement('div');
+                    stringEl.className = 'string';
+                    for (let j = 0; j <= NUM_FRETS; j++) {
+                        const fretEl = document.createElement('div');
+                        fretEl.className = 'fret';
+                        fretEl.dataset.stringIndex = i;
+                        fretEl.dataset.fret = j;
+                        const fretLabel = document.createElement('div');
+                        fretLabel.className = 'fret-label';
+                        fretLabel.textContent = Tonal.Note.pitchClass(getNote(i, j));
+                        fretEl.appendChild(fretLabel);
+                        fretEl.addEventListener('click', handleFretClick);
+                        stringEl.appendChild(fretEl);
+                    }
+                    fretboardEl.appendChild(stringEl);
+                });
+                const markers = { 3: [2], 5: [2], 7: [2], 9: [2], 12: [1, 3], 15: [2] };
+                Object.entries(markers).forEach(([fretNum, positions]) => {
+                    positions.forEach(stringIndex => {
+                        const fretToMark = fretboardEl.querySelector(`.fret[data-fret="${fretNum}"][data-string-index="${stringIndex}"]`);
+                        if (fretToMark) {
+                            const dot = document.createElement('div');
+                            dot.className = 'fret-marker';
+                            fretToMark.appendChild(dot);
+                        }
+                    });
+                });
+                for (let j = 0; j <= NUM_FRETS; j++) {
+                    const numEl = document.createElement('div');
+                    numEl.className = 'fret-number';
+                    numEl.textContent = j;
+                    fretNumbersEl.appendChild(numEl);
+                }
+            };
+
+            const populateSelectors = () => {
+                Tonal.Range.chromatic(["C2", "B2"]).forEach(note => {
+                    const option = document.createElement('option');
+                    option.textContent = Tonal.Note.pitchClass(note);
+                    rootNoteSelect.appendChild(option);
+                });
+                const chordGroups = [ { label: 'Triads & Suspended', chords: [ { value: '', name: 'Major' }, { value: 'm', name: 'Minor' }, { value: 'sus2', name: 'Sus2' }, { value: 'sus4', name: 'Sus4' }, { value: 'dim', name: 'Diminished' }, { value: 'aug', name: 'Augmented' }, ] }, { label: '7th Chords', chords: [ { value: 'maj7', name: 'Major 7th (Maj7)' }, { value: 'm7', name: 'Minor 7th (m7)' }, { value: '7', name: 'Dominant 7th (7)' }, { value: 'm(maj7)', name: 'Minor-Major 7th' }, { value: '7sus4', name: '7th Suspended 4 (7sus4)' }, ] }, { label: '9th Chords', chords: [ { value: 'maj9', name: 'Major 9th (Maj9)' }, { value: 'm9', name: 'Minor 9th (m9)' }, { value: '9', name: 'Dominant 9th (9)' }, { value: '9sus4', name: '9th Suspended 4 (9sus4)' }, ] }, { label: 'Extended & Added Tones', chords: [ { value: 'm11', name: 'Minor 11th (m11)' }, { value: '13', name: 'Dominant 13th (13)' }, { value: 'Madd9', name: 'Add 9 (Madd9)' }, { value: 'm69', name: 'Minor 6/9 (m69)'}, { value: 'maj7#11', name: 'Maj7 Sharp 11' }, { value: 'maj9#11', name: 'Maj9 Sharp 11' }, { value: '9#11', name: '9 Sharp 11' }, ] }, { label: 'Altered Dominant', chords: [ { value: '7#9', name: '7 Sharp 9' }, { value: '7b9', name: '7 Flat 9' }, { value: '7#5', name: '7 Sharp 5' }, { value: '7b5', name: '7 Flat 5' }, { value: 'alt7', name: 'Altered (7alt)' }, ] }, { label: 'Diminished & Half-Diminished', chords: [ { value: 'm7b5', name: 'Half-Diminished (m7♭5)' }, { value: 'dim7', name: 'Diminished 7th (dim7)' }, ] } ];
+                chordGroups.forEach(group => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = group.label;
+                    group.chords.forEach(type => {
+                        const option = document.createElement('option');
+                        option.value = type.value;
+                        option.textContent = type.name;
+                        optgroup.appendChild(option);
+                    });
+                    chordTypeSelect.appendChild(optgroup);
+                });
+                rootNoteSelect.value = 'C';
+                chordTypeSelect.value = '';
+            };
+            
+            // NEW: Function to populate the Barre Chord dropdown
+            const populateBarreSelector = () => {
+                barreChordSelect.innerHTML = '<option value="">Select Barre Shape...</option>';
+                BARRE_CHORDS.forEach((chord, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = chord.name;
+                    barreChordSelect.appendChild(option);
+                });
+            };
+
+            const findChordVoicings = (chordNotes) => {
+                const allStringNotes = [];
+                for(let i=0; i < OPEN_STRINGS.length; i++){
+                    const stringFrets = [];
+                    for (let j = 0; j <= NUM_FRETS; j++){
+                        const noteOnFret = Tonal.Note.pitchClass(getNote(i,j));
+                        if(chordNotes.includes(noteOnFret)){
+                            stringFrets.push({string: i, fret: j, note: noteOnFret});
+                        }
+                    }
+                    allStringNotes.push(stringFrets);
+                }
+                function getCombinations(arr, currentCombo = []) {
+                    if (arr.length === 0) {
+                        if(currentCombo.length >= 3) {
+                            const comboNotes = new Set(currentCombo.map(c => c.note));
+                            if (chordNotes.every(note => comboNotes.has(note))) availableVoicings.push(currentCombo);
+                        }
+                        return;
+                    }
+                    const firstStringOptions = arr[0];
+                    const remainingStrings = arr.slice(1);
+                    getCombinations(remainingStrings, [...currentCombo]);
+                    for(const note of firstStringOptions){
+                         const maxFret = Math.max(...currentCombo.map(c => c.fret), note.fret);
+                         const minFret = Math.min(...currentCombo.filter(c => c.fret !== 0).map(c => c.fret), note.fret === 0 ? maxFret : note.fret);
+                         if (maxFret - minFret < 5) getCombinations(remainingStrings, [...currentCombo, note]);
+                    }
+                }
+                availableVoicings = [];
+                getCombinations(allStringNotes);
+                populatePositionsDropdown(availableVoicings);
+            }
+
+            const populatePositionsDropdown = (voicings) => {
+                positionsSelect.innerHTML = '';
+                if(voicings.length === 0){
+                    positionsSelect.innerHTML = '<option value="">No positions found</option>';
+                    return;
+                }
+                positionsSelect.innerHTML = `<option value="">Found ${voicings.length} positions</option>`;
+                voicings.forEach((voicing, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    const fretPositions = Array(6).fill('x');
+                    voicing.forEach(note => fretPositions[note.string] = note.fret);
+                    option.textContent = `Position ${index + 1}: ${fretPositions.reverse().join('-')}`;
+                    positionsSelect.appendChild(option);
+                });
+            }
+
+            const displaySelectedVoicing = () => {
+                const selectedIndex = positionsSelect.value;
+                if (selectedIndex === "" || !availableVoicings[parseInt(selectedIndex)]) {
+                    if(availableVoicings.length > 0) {
+                        positionsSelect.value = 0;
+                        displaySelectedVoicing();
+                    }
+                    return;
+                }
+                const voicing = availableVoicings[parseInt(selectedIndex)];
+                clearFretboard();
+                voicing.forEach(note => {
+                    const fretEl = fretboardEl.querySelector(`.fret[data-string-index='${note.string}'][data-fret='${note.fret}']`);
+                    if (fretEl) {
+                        fretEl.classList.add('selected');
+                        selectedNotes.push({ id: `${note.string}-${note.fret}`, note: getNote(note.string, note.fret), stringIndex: note.string, fret: note.fret });
+                    }
+                });
+                updateChordDisplay();
+            }
+
+            // NEW: Function to display a selected barre chord
+            const displayBarreChord = () => {
+                const selectedIndex = barreChordSelect.value;
+                if (selectedIndex === "") {
+                    clearFretboard();
+                    return;
+                }
+
+                positionsSelect.value = ""; // Reset positions select
+                clearFretboard();
+                
+                const shape = BARRE_CHORDS[selectedIndex];
+                const rootNote = rootNoteSelect.value;
+                const openStringNote = Tonal.Note.pitchClass(OPEN_STRINGS[shape.rootString - 1]);
+                
+                // Calculate the difference in semitones to find the base fret
+                const rootChroma = Tonal.Note.chroma(rootNote);
+                const openStringChroma = Tonal.Note.chroma(openStringNote);
+                let baseFret = rootChroma - openStringChroma;
+                if (baseFret < 0) baseFret += 12;
+
+                shape.fingering.forEach(note => {
+                    const stringIndex = note.s;
+                    const absoluteFret = baseFret + note.f;
+                    if (absoluteFret <= NUM_FRETS) {
+                        const fretEl = fretboardEl.querySelector(`.fret[data-string-index='${stringIndex}'][data-fret='${absoluteFret}']`);
+                        if (fretEl) {
+                             fretEl.classList.add('selected');
+                             selectedNotes.push({ id: `${stringIndex}-${absoluteFret}`, note: getNote(stringIndex, absoluteFret), stringIndex, fret: absoluteFret });
+                        }
+                    }
+                });
+                updateChordDisplay();
+            };
+
+            const displayChordFromSelection = () => {
+                barreChordSelect.value = ""; // Reset barre select
+                clearFretboard();
+                const root = rootNoteSelect.value;
+                const type = chordTypeSelect.value;
+                const chordSymbol = root + type;
+                const chordData = Tonal.Chord.get(chordSymbol);
+                if (chordData.empty) {
+                    clearPositionsDropdown();
+                    return;
+                }
+                const chordNotes = chordData.notes;
+                findChordVoicings(chordNotes); 
+                if(availableVoicings.length > 0) {
+                    positionsSelect.value = 0;
+                    displaySelectedVoicing();
+                } else {
+                    updateChordDisplay();
+                }
+            };
+
+            const displayTuning = () => {
+                tuningSubtitleEl.textContent = `Standard Tuning: ${OPEN_STRINGS.map(Tonal.Note.pitchClass).reverse().join(' ')}`;
+            };
+            
+            const handleArrowClick = (e) => {
+                const targetId = e.currentTarget.dataset.target;
+                const direction = parseInt(e.currentTarget.dataset.direction, 10);
+                const selectEl = document.getElementById(targetId);
+                if (!selectEl || selectEl.options.length === 0) return; 
+                let newIndex = selectEl.selectedIndex + direction;
+                if (newIndex < 0) newIndex = selectEl.options.length - 1;
+                else if (newIndex >= selectEl.options.length) newIndex = 0;
+                if (selectEl.options[newIndex].disabled) { // Skip optgroup labels
+                    newIndex += direction;
+                    if (newIndex < 0) newIndex = selectEl.options.length - 1;
+                    if (newIndex >= selectEl.options.length) newIndex = 0;
+                }
+                if (selectEl.options[newIndex].disabled) return; // a second check
+                selectEl.selectedIndex = newIndex;
+                selectEl.dispatchEvent(new Event('change', { 'bubbles': true }));
+            };
+
+            // --- INITIALIZATION ---
+            createFretboard();
+            populateSelectors();
+            populateBarreSelector(); // New
+            displayTuning();
+            displayChordFromSelection();
+
+            // --- EVENT LISTENERS ---
+            rootNoteSelect.addEventListener('change', () => {
+                // If a barre chord is selected, redraw it at new root. Otherwise, find chords.
+                if (barreChordSelect.value !== "") {
+                    displayBarreChord();
+                } else {
+                    displayChordFromSelection();
+                }
+            });
+            chordTypeSelect.addEventListener('change', displayChordFromSelection);
+            positionsSelect.addEventListener('change', () => {
+                barreChordSelect.value = ""; // Reset barre select
+                displaySelectedVoicing();
+            });
+            barreChordSelect.addEventListener('change', displayBarreChord); // New
+            clearBtn.addEventListener('click', () => {
+                clearFretboard();
+                rootNoteSelect.value = 'C';
+                chordTypeSelect.value = '';
+                barreChordSelect.value = '';
+                displayChordFromSelection();
+            });
+            arrowBtns.forEach(btn => btn.addEventListener('click', handleArrowClick));
+
+        });
+    </script>
+</body>
+</html>
